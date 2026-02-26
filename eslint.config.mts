@@ -13,7 +13,7 @@ export default tseslint.config(
 				projectService: {
 					allowDefaultProject: [
 						'eslint.config.js',
-						'manifest.json'
+						'src/manifest.json'
 					]
 				},
 				tsconfigRootDir: import.meta.dirname,
@@ -25,6 +25,7 @@ export default tseslint.config(
 	globalIgnores([
 		"node_modules",
 		"dist",
+		"lib",
 		"esbuild.config.mjs",
 		"eslint.config.js",
 		"version-bump.mjs",

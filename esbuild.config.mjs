@@ -1,6 +1,8 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from 'node:module';
+import { copyFileSync, watch } from "node:fs";
+import { copyToVault } from "./lib/copy-to-vault.mjs";
 
 const banner =
 `/*
@@ -10,28 +12,45 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+const watchMode = (process.argv[2] === "watch");
+
+function copyAssets() {
+	copyFileSync("src/manifest.json", "manifest.json");
+	copyFileSync("src/styles.css", "styles.css");
+}
+
+const copyAssetsPlugin = {
+	name: "copy-assets",
+	setup(build) {
+			build.onEnd((result) => {
+					if (result.errors.length > 0) return;
+					copyAssets();
+					if (watchMode) copyToVault();
+			});
+	},
+};
 
 const context = await esbuild.context({
 	banner: {
-		js: banner,
+			js: banner,
 	},
 	entryPoints: ["src/main.ts"],
 	bundle: true,
 	external: [
-		"obsidian",
-		"electron",
-		"@codemirror/autocomplete",
-		"@codemirror/collab",
-		"@codemirror/commands",
-		"@codemirror/language",
-		"@codemirror/lint",
-		"@codemirror/search",
-		"@codemirror/state",
-		"@codemirror/view",
-		"@lezer/common",
-		"@lezer/highlight",
-		"@lezer/lr",
-		...builtinModules],
+			"obsidian",
+			"electron",
+			"@codemirror/autocomplete",
+			"@codemirror/collab",
+			"@codemirror/commands",
+			"@codemirror/language",
+			"@codemirror/lint",
+			"@codemirror/search",
+			"@codemirror/state",
+			"@codemirror/view",
+			"@lezer/common",
+			"@lezer/highlight",
+			"@lezer/lr",
+			...builtinModules],
 	format: "cjs",
 	target: "es2018",
 	logLevel: "info",
@@ -39,11 +58,27 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: "main.js",
 	minify: prod,
+	plugins: [copyAssetsPlugin],
 });
 
 if (prod) {
 	await context.rebuild();
 	process.exit(0);
+} else if (watchMode) {
+	await context.watch();
+
+	// Watch non-bundled files (manifest.json, styles.css) that esbuild doesn't track.
+	let debounceTimer = null;
+	watch("src", { recursive: true }, (eventType, filename) => {
+			if (!filename) return;
+			if (!/\.(json|css)$/.test(filename)) return;
+			if (debounceTimer) clearTimeout(debounceTimer);
+			debounceTimer = setTimeout(() => {
+					console.log(`[watch] ${filename} changed, copying...`);
+					copyAssets();
+					copyToVault();
+			}, 200);
+	});
 } else {
 	await context.watch();
 }
